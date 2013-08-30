@@ -1,15 +1,17 @@
 import os
 
 from pycli_tools.parsers import get_argparser
-from pycli_tools.rawinput import ask_user_yesno
 
 from ca import __version__
 
 from ca.store import SslStore
 from ca.store import OPENSSL_BIN
 
-from ca.exceptions import *
-
+from ca.exceptions import SslStoreExistsError
+from ca.exceptions import SslStoreNotInitializedError
+from ca.exceptions import AuthorityExistsError
+from ca.exceptions import AuthorityCertificateError
+from ca.exceptions import AuthorityKeyError
 
 
 def handle_init(args, store, parser):
@@ -19,7 +21,6 @@ def handle_init(args, store, parser):
         parser.error('%s\nUse --force to overwrite' % e)
     else:
         parser.exit(message='Store initialized\n')
-
 
 
 def handle_domain(args, store, parser):
@@ -47,12 +48,8 @@ def handle_view_cert(args, store, parser):
     print store.view_info(args.cert_file)
 
 
-
-
 #####################################################################
 #####################################################################
-
-
 
 
 def add_parser_for_init(subparsers):
@@ -107,7 +104,6 @@ def add_parser_for_view_cert(subparsers):
     )
     parser.set_defaults(func=handle_view_cert)
     return parser
-
 
 
 def main():

@@ -1,11 +1,13 @@
 import os
-import sys
 import logging
-import hashlib
 import subprocess
 
-from ca.exceptions import *
-
+from ca.exceptions import AuthorityCertificateError
+from ca.exceptions import AuthorityExistsError
+from ca.exceptions import AuthorityKeyError
+from ca.exceptions import SslStoreError
+from ca.exceptions import SslStoreExistsError
+from ca.exceptions import SslStoreNotInitializedError
 
 
 logger = logging.getLogger(__name__)
@@ -52,8 +54,7 @@ class SslStore(object):
         self.dir = os.path.abspath(dir)
         self.ca_key = os.path.join(self.dir, 'ca', 'ca.key')
         self.ca_crt = os.path.join(self.dir, 'ca', 'ca.crt')
-        self.serials= os.path.join(self.dir, '.serials')
-
+        self.serials = os.path.join(self.dir, '.serials')
 
     def initialized(self):
         if not os.path.exists(self.dir):
@@ -66,7 +67,6 @@ class SslStore(object):
             return False
         return True
 
-
     def reset(self):
         logger.debug('Deleting contents of %s', self.dir)
         for root, dirs, files in os.walk(self.dir, topdown=False):
@@ -74,7 +74,6 @@ class SslStore(object):
                 os.remove(os.path.join(root, name))
             for name in dirs:
                 os.rmdir(os.path.join(root, name))
-
 
     def initialize(self, force=False):
         logger.debug('Initialize CA SslStore in %s', self.dir)
@@ -88,13 +87,13 @@ class SslStore(object):
             logger.info('Directory %s exists.', self.dir)
             self.reset()
         else:
-            raise SslStoreExistsError('Directory %s already exists.' % self.dir)
+            raise SslStoreExistsError('Directory %s already exists.' %
+                                      self.dir)
 
         os.makedirs(os.path.join(self.dir, 'ca'))
         os.makedirs(os.path.join(self.dir, 'domains'))
 
         self.write_serial(serial=1)
-
 
     def generate_root_ca_key(self, days=3650):
         has_ca_key = os.path.exists(self.ca_key)
@@ -120,10 +119,8 @@ class SslStore(object):
         except subprocess.CalledProcessError as e:
             raise SslStoreError(e)
 
-
     def get_next_serial(self):
         return int(open(self.serials, 'r').read())
-
 
     def write_serial(self, serial=None):
         if not serial:
@@ -133,7 +130,6 @@ class SslStore(object):
         file = open(self.serials, 'w')
         file.write(str(serial))
         file.close()
-
 
     def add_domain(self, domain_name, days=365):
         if not self.initialized():
@@ -152,7 +148,8 @@ class SslStore(object):
             logger.info('Generating a private key')
             self.openssl.execute('genrsa', '-out', key, '1024')
             logger.info('Generating a certificate signing request')
-            self.openssl.execute('req', '-new', '-key', key, '-out', csr, '-config', cnf)
+            self.openssl.execute('req', '-new', '-key', key,
+                                 '-out', csr, '-config', cnf)
             logger.info('Generating a certificate and sign with CA')
             self.openssl.execute('x509', '-req', '-days', str(days),
                                  '-CA', self.ca_crt, '-CAkey', self.ca_key,
@@ -168,13 +165,11 @@ class SslStore(object):
         else:
             self.write_serial()
 
-
     def view_info(self, file, type='cert'):
         if 'cert' == type:
             return self.openssl.get_subject_from_crt(file)
         else:
             raise SslStoreError('%s type not supported' % type)
-
 
     def __str__(self):
         return '<SslStore dir=%s>' % self.dir
