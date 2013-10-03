@@ -1,6 +1,7 @@
 import os
 
 from pycli_tools.parsers import get_argparser
+from pycli_tools.commands import Command, arg
 
 from ca import __version__
 
@@ -14,96 +15,76 @@ from ca.exceptions import AuthorityCertificateError
 from ca.exceptions import AuthorityKeyError
 
 
-def handle_init(args, store, parser):
-    try:
-        store.initialize(force=args.force)
-    except SslStoreExistsError as e:
-        parser.error('%s\nUse --force to overwrite' % e)
-    else:
-        parser.exit(message='Store initialized\n')
+class InitCommand(Command):
+    '''bootstrap a new CA SslStore in the given directory.'''
+
+    args = [
+        arg('--force', action='store_true', help=\
+            'if the current directory already exists and is not '
+            'empty: do not ask for confirmation and overwrite '
+            'its contents.')
+    ]
+
+    def run(self, args, store, parser):
+        try:
+            store.initialize(force=args.force)
+        except SslStoreExistsError as e:
+            parser.error('%s\nUse --force to overwrite' % e)
+        else:
+            parser.exit(message='Store initialized\n')
 
 
-def handle_domain(args, store, parser):
-    try:
-        store.add_domain(args.domain)
-    except SslStoreNotInitializedError:
-        parser.error('No store in %s. Maybe you should bootstrap it first?'
-                     % args.base_dir)
+class DomainCommand(Command):
+    '''create a server certificate for a FQDN'''
+
+    args = [
+        arg('domain', help='domain name to generate the certificate for')
+    ]
+
+    def run(self, args, store, parser):
+        try:
+            store.add_domain(args.domain)
+        except SslStoreNotInitializedError:
+            parser.error('No store in %s. Maybe you should bootstrap it first?'
+                         % args.base_dir)
 
 
-def handle_generate_ca(args, store, parser):
-    try:
-        store.generate_root_ca_key(args.days)
-    except AuthorityExistsError as e:
-        parser.error(e)
-    except AuthorityCertificateError as e:
-        parser.error(e)
-    except AuthorityKeyError as e:
-        parser.error(e)
-    else:
-        parser.exit(message='CA key generated in %s\n' % store.ca_key)
+class GenerateCaCommand(Command):
+    '''create the root certificate authority'''
+
+    args = [
+        arg('--days', default="3650",
+            help='the amount of days the ca certificate is valid')
+    ]
+
+    def run(self, args, store, parser):
+        try:
+            store.generate_root_ca_key(args.days)
+        except AuthorityExistsError as e:
+            parser.error(e)
+        except AuthorityCertificateError as e:
+            parser.error(e)
+        except AuthorityKeyError as e:
+            parser.error(e)
+        else:
+            parser.exit(message='CA key generated in %s\n' % store.ca_key)
 
 
-def handle_view_cert(args, store, parser):
-    print store.view_info(args.cert_file)
+class ViewCertCommand(Command):
+    '''view the subject of a generated certificate'''
+
+    args = [
+        arg('cert_file', help='the certificate file')
+    ]
+
+    def run(self, args, store, parser):
+        print store.view_info(args.cert_file)
+
 
 
 #####################################################################
 #####################################################################
 
-
-def add_parser_for_init(subparsers):
-    parser = subparsers.add_parser(
-        'init',
-        help='bootstrap a new CA SslStore in the given directory.'
-    )
-    parser.add_argument(
-        '--force', action='store_true',
-        help='if the current directory already exists and is not '
-             'empty: do not ask for confirmation and overwrite '
-             'its contents.'
-    )
-    parser.set_defaults(func=handle_init)
-    return parser
-
-
-def add_parser_for_domain(subparsers):
-    parser = subparsers.add_parser(
-        'domain',
-        help='create a server certificate for a FQDN'
-    )
-    parser.add_argument(
-        'domain',
-        help='domain name to generate the certificate for'
-    )
-    parser.set_defaults(func=handle_domain)
-    return parser
-
-
-def add_parser_for_generate_ca(subparsers):
-    parser = subparsers.add_parser(
-        'generate-ca',
-        help='create the root certificate authority'
-    )
-    parser.add_argument(
-        '--days', default="3650",
-        help='the amount of days the ca certificate is valid'
-    )
-    parser.set_defaults(func=handle_generate_ca)
-    return parser
-
-
-def add_parser_for_view_cert(subparsers):
-    parser = subparsers.add_parser(
-        'view-cert',
-        help='view the subject of a generated certificate'
-    )
-    parser.add_argument(
-        'cert_file',
-        help='the certificate file'
-    )
-    parser.set_defaults(func=handle_view_cert)
-    return parser
 
 
 def main():
@@ -125,12 +106,13 @@ def main():
         default=os.getcwd(),
         help='base directory'
     )
-    subparsers = parser.add_subparsers()
 
-    add_parser_for_init(subparsers)
-    add_parser_for_domain(subparsers)
-    add_parser_for_generate_ca(subparsers)
-    add_parser_for_view_cert(subparsers)
+    parser.add_commands([
+        InitCommand(),
+        DomainCommand(),
+        GenerateCaCommand(),
+        ViewCertCommand()
+    ])
 
     # parse command line arguments
     args = parser.parse_args()
@@ -142,4 +124,4 @@ def main():
     )
 
     # call the subcommand handler function
-    parser.exit(args.func(args, store=store, parser=parser))
+    args.func(args, store=store, parser=parser)
