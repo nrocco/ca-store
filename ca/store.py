@@ -120,15 +120,15 @@ class SslStore(object):
             raise SslStoreError(e)
 
     def get_next_serial(self):
-        return int(open(self.serials, 'r').read())
+        return open(self.serials, 'r').read()
 
     def write_serial(self, serial=None):
         if not serial:
-            serial = self.get_next_serial() + 1
+            serial = int(self.get_next_serial()) + 1
 
         logger.debug('Writing serial %d to .serials', serial)
         file = open(self.serials, 'w')
-        file.write(str(serial))
+        file.write('%02d' % serial)
         file.close()
 
     def add_domain(self, domain_name, days=365):
@@ -154,7 +154,7 @@ class SslStore(object):
             self.openssl.execute('x509', '-req', '-days', str(days),
                                  '-CA', self.ca_crt, '-CAkey', self.ca_key,
                                  '-in', csr, '-out', crt,
-                                 '-set_serial', str(self.get_next_serial()))
+                                 '-set_serial', self.get_next_serial())
         except Exception as e:
             for f in [key, csr, crt, cnf]:
                 try:
